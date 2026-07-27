@@ -152,7 +152,7 @@ class AudioVAE(torch.nn.Module):
 
         mel_spec = self.preprocessor.waveform_to_mel(
             waveform, waveform_sample_rate, device=waveform.device
-        )
+        ).to(dtype=waveform.dtype)
 
         latents = self.autoencoder.encode(mel_spec)
         posterior = DiagonalGaussianDistribution(latents)
