@@ -414,21 +414,42 @@ class MiniMaxH3VideoVAE(nn.Module):
             return self.tiled_encode(x)
         return self._encode_moments(x)
 
-    def _adaptive_decode(self, z):
+    def _decode_tiling_options(self, decode_options):
+        if not decode_options:
+            return self.tile_size, self.tile_overlap_min
+
+        tile_size = int(decode_options.get("tile_size", self.tile_size))
+        tile_overlap = int(decode_options.get(
+            "tile_overlap", self.tile_overlap_min))
+        if tile_size < self.vae_ratio or tile_size % self.vae_ratio:
+            raise ValueError(
+                "MiniMax H3 VAE tile_size must be a multiple of %d pixels"
+                % self.vae_ratio)
+        if (tile_overlap < self.vae_ratio
+                or tile_overlap % self.vae_ratio
+                or tile_overlap >= tile_size):
+            raise ValueError(
+                "MiniMax H3 VAE tile_overlap must be a smaller multiple of "
+                "%d pixels" % self.vae_ratio)
+        return tile_size, tile_overlap
+
+    def _adaptive_decode(self, z, decode_options=None):
         if self.tiling:
-            return self.tiled_decode(z)
+            return self.tiled_decode(z, decode_options)
         return self._decode_pixels(z)
 
     # spatial tiling
 
-    def split_tiles(self, input_len):
-        tile_size = self.tile_size
+    def split_tiles(self, input_len, tile_size=None, tile_overlap_min=None):
+        tile_size = self.tile_size if tile_size is None else tile_size
+        tile_overlap_min = (self.tile_overlap_min
+                            if tile_overlap_min is None else tile_overlap_min)
         if tile_size >= input_len:
             return [0], [input_len], []
 
         N = math.ceil(input_len / tile_size)
         while True:
-            overlaps = [self.tile_overlap_min] * (N - 1)
+            overlaps = [tile_overlap_min] * (N - 1)
             remaining = tile_size * N - sum(overlaps) - input_len
             if remaining < 0:
                 N += 1
@@ -502,10 +523,14 @@ class MiniMaxH3VideoVAE(nn.Module):
             result_rows.append(torch.cat(result_row, dim=-1))
         return torch.cat(result_rows, dim=-2)
 
-    def tiled_decode(self, z):
+    def tiled_decode(self, z, decode_options=None):
+        tile_size, tile_overlap_min = self._decode_tiling_options(
+            decode_options)
         height, width = z.shape[-2] * self.vae_ratio, z.shape[-1] * self.vae_ratio
-        y_idx, y_len, y_overlap = self.split_tiles(height)
-        x_idx, x_len, x_overlap = self.split_tiles(width)
+        y_idx, y_len, y_overlap = self.split_tiles(
+            height, tile_size, tile_overlap_min)
+        x_idx, x_len, x_overlap = self.split_tiles(
+            width, tile_size, tile_overlap_min)
 
         # Blended tiles are written straight into a pre-allocated canvas.
         canvas = None
@@ -606,7 +631,7 @@ class MiniMaxH3VideoVAE(nn.Module):
             num_chunks += 1
         return pad_tokens, num_chunks
 
-    def decode_temporal(self, z, output_buffer=None):
+    def decode_temporal(self, z, output_buffer=None, decode_options=None):
         chunk_dec = self.tokens_chunk_size * self.vae_ratio_t
         split_count = int(self.token_drop > 0) + 1
 
@@ -642,7 +667,7 @@ class MiniMaxH3VideoVAE(nn.Module):
             t_end_idx = t_start_idx + self.tokens_chunk_size + self.token_overlap
             clip_z = z[:, :, t_start_idx:t_end_idx, :, :]
 
-            clip_dec = self._adaptive_decode(clip_z)
+            clip_dec = self._adaptive_decode(clip_z, decode_options)
 
             for j in range(split_count):
                 f_start_idx = j * chunk_dec
@@ -693,18 +718,19 @@ class MiniMaxH3VideoVAE(nn.Module):
         return self.encode(x)
 
     def decode_tiled(self, z, **kwargs):
-        return self.decode(z)
+        return self.decode(z, decode_options=kwargs.get("decode_options"))
 
-    def decode(self, z, output_buffer=None):
+    def decode(self, z, output_buffer=None, decode_options=None):
         # z: [B, 24, T_lat, H_lat, W_lat] normalized latents -> float32 pixels [B, 3, T, H, W] in [0, 1]
         latents_mean = self.latents_mean.view(1, -1, 1, 1, 1).to(z)
         latents_std = self.latents_std.view(1, -1, 1, 1, 1).to(z)
         z = z * latents_std + latents_mean
 
         if z.shape[2] == 1:
-            dec = self._finalize_pixels(self._adaptive_decode(z)[:, :, -1:, :, :])
+            dec = self._finalize_pixels(
+                self._adaptive_decode(z, decode_options)[:, :, -1:, :, :])
             if output_buffer is None:
                 return dec
             output_buffer.copy_(dec)
             return output_buffer
-        return self.decode_temporal(z, output_buffer)
+        return self.decode_temporal(z, output_buffer, decode_options)
