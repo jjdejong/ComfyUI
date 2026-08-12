@@ -10,7 +10,7 @@ import comfy.model_management
 import comfy.ops
 import comfy.quant_ops
 import comfy.rmsnorm
-from comfy.ldm.modules.attention import optimized_attention
+from comfy.ldm.modules.attention import attention_split, optimized_attention
 
 ops = comfy.ops.disable_weight_init
 
@@ -34,6 +34,15 @@ LATENTS_STD = [
     2.961095094680786, 2.7694199085235595, 3.0496184825897215, 2.1088054180145265,
     3.276226282119751, 3.1627357006073, 2.28168129920959475, 2.6127843856811525,
 ]
+
+
+def _h3_vae_attention(q, k, v, heads, **kwargs):
+    if (q.device.type == "cuda"
+            and torch.version.hip is not None
+            and torch.version.rocm == "10.1.0"
+            and torch.cuda.get_device_properties(q.device).gcnArchName.split(":")[0] == "gfx1151"):
+        return attention_split(q, k, v, heads, **kwargs)
+    return optimized_attention(q, k, v, heads, **kwargs)
 
 
 # 3D causal CNN encoder
@@ -237,8 +246,8 @@ class Attention(nn.Module):
             query[..., :rot], key[..., :rot] = comfy.quant_ops.ck.apply_rope_split_half(
                 query[..., :rot], key[..., :rot], rotary_pos_emb)
 
-        out = optimized_attention(query.transpose(1, 2), key.transpose(1, 2), value.transpose(1, 2),
-                                  self.heads, skip_reshape=True).nan_to_num_(0.0)
+        out = _h3_vae_attention(query.transpose(1, 2), key.transpose(1, 2), value.transpose(1, 2),
+                                self.heads, skip_reshape=True).nan_to_num_(0.0)
         return self.to_out(out)
 
 
