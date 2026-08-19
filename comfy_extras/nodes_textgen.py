@@ -185,7 +185,8 @@ class TextGenerateLTX2Prompt(TextGenerate):
             # E2B enhancement is text-only; the reference image is consumed by LTXV.
             instructions = LTX24_T2V_SYSTEM_PROMPT.strip()
             formatted_prompt = (
-                f"<|turn>user\n{instructions}\n\n{prompt}<turn|>\n"
+                f"<|turn>system\n{instructions}<turn|>\n"
+                f"<|turn>user\n{prompt}<turn|>\n"
                 f"<|turn>model\n"
             )
         else:
