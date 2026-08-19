@@ -22,15 +22,17 @@ PRIMING = [gemma4.Gemma4_31B, gemma4.Gemma4_12B]
 class _CaptureTemplate:
     """Stands in for SDTokenizer.tokenize_with_weights so the built template is checked without model files."""
     llama_text = ""
+    tokenizer_kwargs = {}
 
     def tokenize_with_weights(self, text, return_word_ids=False, **kwargs):
         self.llama_text = text
+        self.tokenizer_kwargs = kwargs
         return {}
 
 
 def build_template(variant, **kwargs):
     prime = variant.tokenizer.tokenizer_class.prime_empty_thought
-    probe = type("Probe", (gemma4.Gemma4_Tokenizer, _CaptureTemplate), {"prime_empty_thought": prime})()
+    probe = type("Probe", (gemma4.Gemma4_Tokenizer, _CaptureTemplate), {"prime_empty_thought": prime, "min_length": 1})()
     probe.tokenize_with_weights(PROMPT, **kwargs)
     return probe.llama_text
 
@@ -59,3 +61,10 @@ def test_thinking_disabled_primes_a_thought_channel(variant):
 @pytest.mark.parametrize("thinking", [False, True])
 def test_skip_template_passes_text_through_unchanged(variant, thinking):
     assert build_template(variant, skip_template=True, thinking=thinking) == PROMPT
+
+
+def test_min_length_override_reaches_sd_tokenizer():
+    probe = type("Probe", (gemma4.Gemma4_Tokenizer, _CaptureTemplate), {})()
+    probe.min_length = 1024
+    probe.tokenize_with_weights(PROMPT, min_length=1)
+    assert probe.tokenizer_kwargs["min_length"] == 1
