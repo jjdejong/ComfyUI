@@ -250,7 +250,7 @@ class TextGenerateLTX2Prompt(TextGenerate):
             elif clip.tokenizer.gemma4.prime_empty_thought:
                 model_open = "<|channel>thought\n<channel|>"
             else:
-                model_open = "<|channel>final\n"
+                model_open = ""
             media = "<|image><|image|><image|>\n\n" if image is not None else ""
             formatted_prompt = (
                 f"<|turn>system\n{think_prefix}{system}<turn|>\n"
