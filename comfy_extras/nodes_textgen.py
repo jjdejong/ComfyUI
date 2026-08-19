@@ -244,19 +244,9 @@ class TextGenerateLTX2Prompt(TextGenerate):
             else:
                 instructions = LTX24_T2V_SYSTEM_PROMPT.strip()
                 user_text = f"{instructions}\n\nuser prompt: {prompt}"
-            if thinking:
-                user_text = f"<|think|>\n{user_text}"
-            if thinking:
-                model_open = ""
-            elif clip.tokenizer.gemma4.prime_empty_thought:
-                model_open = "<|channel>thought\n<channel|>"
-            else:
-                model_open = ""
-            media = "<|image><|image|><image|>\n\n" if image is not None else ""
-            formatted_prompt = (
-                f"<|turn>user\n{media}{user_text}<turn|>\n"
-                f"<|turn>model\n{model_open}"
-            )
+            # Let Gemma4_Tokenizer build the canonical chat template, including
+            # the model-specific thinking and channel handling.
+            formatted_prompt = user_text
         else:
             system = (LTX2_I2V_SYSTEM_PROMPT if image is not None else LTX2_T2V_SYSTEM_PROMPT).strip()
             media = "\n<image_soft_token>\n" if image is not None else ""
@@ -271,7 +261,18 @@ class TextGenerateLTX2Prompt(TextGenerate):
         # Drop reasoning, including a block left unclosed by max_length. Both system prompts ask
         # for the original prompt back when there is nothing to give; empty conditions on nothing.
         text = re.sub(r"<think>.*?(?:</think>|$)", "", out.args[0], flags=re.DOTALL).strip()
-        return io.NodeOutput(text or prompt)
+        analysis_prefixes = (
+            "here is a breakdown",
+            "here's a breakdown",
+            "here are a few ways",
+            "here is an analysis",
+            "analysis of the request",
+            "deconstructing the prompt",
+            "the user has provided",
+        )
+        if len(text) < 32 or text.casefold().startswith(analysis_prefixes):
+            text = prompt
+        return io.NodeOutput(text)
 
 
 class TextgenExtension(ComfyExtension):
