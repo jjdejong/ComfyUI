@@ -184,10 +184,13 @@ class TextGenerateLTX2Prompt(TextGenerate):
         if is_gemma4:
             # E2B enhancement is text-only; the reference image is consumed by LTXV.
             instructions = LTX24_T2V_SYSTEM_PROMPT.strip()
+            model_open = ""
+            if not thinking:
+                model_open = "<|channel>thought\n<channel|>" if clip.tokenizer.gemma4.prime_empty_thought else "<|channel>final\n"
             formatted_prompt = (
                 f"<|turn>system\n{instructions}<turn|>\n"
                 f"<|turn>user\n<scene>\n{prompt}\n</scene><turn|>\n"
-                f"<|turn>model\n"
+                f"<|turn>model\n{model_open}"
             )
         else:
             system = (LTX2_I2V_SYSTEM_PROMPT if image is not None else LTX2_T2V_SYSTEM_PROMPT).strip()
