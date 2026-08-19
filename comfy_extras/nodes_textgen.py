@@ -269,6 +269,11 @@ class TextGenerateLTX2Prompt(TextGenerate):
             "analysis of the request",
             "deconstructing the prompt",
             "the user has provided",
+            "这张图片是关于",
+            "这段文字是关于",
+            "这个输入是一个",
+            "核心概念解析",
+            "ai 的处理路径",
         )
         analysis_probe = re.sub(r"^[\s*_`#>~-]+", "", text).casefold()
         if len(text) < 32 or analysis_probe.startswith(analysis_prefixes):
