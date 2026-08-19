@@ -228,7 +228,14 @@ class TextGenerateLTX2Prompt(TextGenerate):
     def execute(cls, clip, prompt, max_length, sampling_mode, image=None, thinking=False, use_default_template=True, video=None, audio=None) -> io.NodeOutput:
         # Gemma 3 and Gemma 4 use different chat-turn markers and image tokens.
         # The Gemma 4 text encoder is the LTX 2.4 path; Gemma 3 is LTX 2.0.
-        is_gemma4 = "gemma4" in getattr(clip.tokenizer, "clip_name", "")
+        clip_name = clip.tokenizer.clip_name
+        if clip_name not in ("gemma3_12b", "gemma4"):
+            raise RuntimeError(
+                "Generate LTX2 Prompt requires a Gemma 3 or Gemma 4 text encoder "
+                f"(gemma3_12b or gemma4), got {clip_name!r}."
+            )
+
+        is_gemma4 = clip_name == "gemma4"
 
         if is_gemma4:
             if image is not None:
@@ -238,7 +245,12 @@ class TextGenerateLTX2Prompt(TextGenerate):
                 system = LTX24_T2V_SYSTEM_PROMPT.strip()
                 user_text = f"user prompt: {prompt}"
             think_prefix = "<|think|>\n" if thinking else ""
-            model_open = "" if thinking else "<|channel>final\n"
+            if thinking:
+                model_open = ""
+            elif clip.tokenizer.gemma4.prime_empty_thought:
+                model_open = "<|channel>thought\n<channel|>"
+            else:
+                model_open = "<|channel>final\n"
             media = "<|image><|image|><image|>\n\n" if image is not None else ""
             formatted_prompt = (
                 f"<|turn>system\n{think_prefix}{system}<turn|>\n"

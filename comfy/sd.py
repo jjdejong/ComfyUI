@@ -1528,12 +1528,22 @@ def load_clip_model_patcher(ckpt_paths, embedding_directory=None, clip_type=CLIP
     clip = load_clip(ckpt_paths, embedding_directory, clip_type, model_options, disable_dynamic)
     return clip.patcher
 
+def _load_gemma4_tokenizer_sidecar(path, state_dict):
+    if "tokenizer_json" in state_dict or "model.language_model.layers.0.post_feedforward_layernorm.weight" not in state_dict:
+        return
+
+    tokenizer_path = os.path.join(os.path.dirname(path), "tokenizer.json")
+    if os.path.isfile(tokenizer_path):
+        with open(tokenizer_path, "rb") as f:
+            state_dict["tokenizer_json"] = torch.frombuffer(bytearray(f.read()), dtype=torch.uint8)
+
 def load_clip(ckpt_paths, embedding_directory=None, clip_type=CLIPType.STABLE_DIFFUSION, model_options={}, disable_dynamic=False):
     clip_data = []
     for p in ckpt_paths:
         sd, metadata = comfy.utils.load_torch_file(p, safe_load=True, return_metadata=True)
         if model_options.get("custom_operations", None) is None:
             sd, metadata = comfy.utils.convert_old_quants(sd, model_prefix="", metadata=metadata)
+        _load_gemma4_tokenizer_sidecar(p, sd)
         clip_data.append(sd)
     clip = load_text_encoder_state_dicts(clip_data, embedding_directory=embedding_directory, clip_type=clip_type, model_options=model_options, disable_dynamic=disable_dynamic)
     clip.patcher.cached_patcher_init = (load_clip_model_patcher, (ckpt_paths, embedding_directory, clip_type, model_options))
@@ -1704,6 +1714,14 @@ def load_text_encoder_state_dicts(state_dicts=[], embedding_directory=None, clip
                 clip_data[i]["text_projection.weight"] = clip_data[i]["text_projection"].transpose(0, 1) #old models saved with the CLIPSave node
         if "lm_head.weight" in clip_data[i]:
             clip_data[i]["model.lm_head.weight"] = clip_data[i].pop("lm_head.weight") # prefix missing in some models
+        if "model.language_model.layers.0.post_feedforward_layernorm.weight" in clip_data[i]:
+            clip_data[i] = comfy.utils.state_dict_prefix_replace(clip_data[i], {
+                "model.language_model.": "model.",
+                "model.audio_tower.": "audio_model.",
+                "model.embed_audio.": "audio_projector.",
+                "model.vision_tower.": "vision_model.",
+                "model.embed_vision.": "multi_modal_projector.",
+            })
 
     tokenizer_data = {}
     clip_target = EmptyClass()
@@ -1793,7 +1811,10 @@ def load_text_encoder_state_dicts(state_dicts=[], embedding_directory=None, clip
                            TEModel.GEMMA_4_12B: comfy.text_encoders.gemma4.Gemma4_12B}[te_model]
                 clip_target.clip = comfy.text_encoders.gemma4.gemma4_te(**llama_detect(clip_data), model_class=variant)
                 clip_target.tokenizer = variant.tokenizer
-            tokenizer_data["tokenizer_json"] = clip_data[0].get("tokenizer_json", None)
+            tokenizer_json = clip_data[0].get("tokenizer_json", None)
+            if tokenizer_json is None:
+                raise RuntimeError("Gemma 4 text encoder checkpoint is missing tokenizer_json; place tokenizer.json next to the checkpoint.")
+            tokenizer_data["tokenizer_json"] = tokenizer_json
         elif te_model == TEModel.GEMMA_2_2B:
             if clip_type == CLIPType.PIXELDIT:
                 clip_target.clip = comfy.text_encoders.pixeldit.pixeldit_te(**llama_detect(clip_data))
