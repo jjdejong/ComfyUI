@@ -270,7 +270,8 @@ class TextGenerateLTX2Prompt(TextGenerate):
             "deconstructing the prompt",
             "the user has provided",
         )
-        if len(text) < 32 or text.casefold().startswith(analysis_prefixes):
+        analysis_probe = re.sub(r"^[\s*_`#>~-]+", "", text).casefold()
+        if len(text) < 32 or analysis_probe.startswith(analysis_prefixes):
             text = prompt
         return io.NodeOutput(text)
 
