@@ -239,12 +239,13 @@ class TextGenerateLTX2Prompt(TextGenerate):
 
         if is_gemma4:
             if image is not None:
-                system = LTX24_I2V_SYSTEM_PROMPT.strip()
-                user_text = f"User Raw Input Prompt: {prompt}."
+                instructions = LTX24_I2V_SYSTEM_PROMPT.strip()
+                user_text = f"{instructions}\n\nUser Raw Input Prompt: {prompt}."
             else:
-                system = LTX24_T2V_SYSTEM_PROMPT.strip()
-                user_text = f"user prompt: {prompt}"
-            think_prefix = "<|think|>\n" if thinking else ""
+                instructions = LTX24_T2V_SYSTEM_PROMPT.strip()
+                user_text = f"{instructions}\n\nuser prompt: {prompt}"
+            if thinking:
+                user_text = f"<|think|>\n{user_text}"
             if thinking:
                 model_open = ""
             elif clip.tokenizer.gemma4.prime_empty_thought:
@@ -253,7 +254,6 @@ class TextGenerateLTX2Prompt(TextGenerate):
                 model_open = ""
             media = "<|image><|image|><image|>\n\n" if image is not None else ""
             formatted_prompt = (
-                f"<|turn>system\n{think_prefix}{system}<turn|>\n"
                 f"<|turn>user\n{media}{user_text}<turn|>\n"
                 f"<|turn>model\n{model_open}"
             )
