@@ -901,10 +901,10 @@
         }
       },
       "widgets_values": [
-        960
+        576
       ],
       "widgets_values_named": {
-        "value": 960
+        "value": 576
       },
       "color": "#1b4669",
       "bgcolor": "#29699c"
@@ -3681,8 +3681,8 @@
         "Node name for S&R": "UNETLoader",
         "models": [
           {
-            "name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
-            "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+            "name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+            "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
             "directory": "diffusion_models"
           }
         ],
@@ -3693,11 +3693,11 @@
         }
       },
       "widgets_values": [
-        "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
         "default"
       ],
       "widgets_values_named": {
-        "unet_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+        "unet_name": "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
         "weight_dtype": "default"
       }
     },
